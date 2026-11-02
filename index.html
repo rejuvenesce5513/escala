@@ -508,8 +508,8 @@ function cobertura(lista,extra){
 // ---------- armazenamento ----------
 const LS_C='escala5x2.colabs', LS_P='escala5x2.params', LS_S='escala5x2.setores', LS_H='escala5x2.hist', LS_V='escala5x2.versao', LS_VISTO='escala5x2.vistoEm';
 // ---------- versão, usuário, histórico ----------
-const APP_VER='2026-11-02.gh1';
-const NOVIDADES=['O painel agora grava e lê direto da planilha no SharePoint, que passa a ser o banco de dados.','Entre com sua conta Microsoft da clínica. Quem tem só permissão de leitura na planilha vê o painel sem os controles de edição.','Se outra pessoa alterar a planilha, o painel recarrega sozinho e avisa o que mudou.'];
+const APP_VER='2026-11-02.gh2';
+const NOVIDADES=['Horário de entrada: agora dá para digitar a hora direto no campo. A alteração é gravada quando você sai do campo ou aperta Enter.','O painel não recarrega enquanto você está digitando em algum campo.'];
 let ultimoLocal=0;
 let USER=null, ME=null, RO=false, HIST=null, HIST_LOADING=false, NOMES={}, marcadorOk=false, carregado=false;
 async function initUser(){
@@ -634,8 +634,8 @@ function useLocal(){
 // ===================== CONFIGURAÇÃO =====================
 // Preencha com os dados do registro do aplicativo no Microsoft Entra ID (veja o roteiro).
 const CFG={
-  clientId:'003f2147-1698-4f0b-91e1-a92c94143f90',   // ID do aplicativo (cliente)
-  tenantId:'89aed341-1dc6-4d0d-b5c7-e8df4293d21d',   // ID do diretório (locatário)
+  clientId:'',   // ID do aplicativo (cliente)
+  tenantId:'',   // ID do diretório (locatário)
   planilha:'https://rejuvenesce.sharepoint.com/Documentos%20Compartilhados/Escala%205x2%20-%20Clinica%20Rejuvenesce.xlsx'
 };
 const VERIFICAR_SEG=60;
@@ -724,7 +724,7 @@ async function gGravar(){
       catch(e){ if(e.status!==404) throw e; await g('POST',`${wbp()}/worksheets/add`,{name:'Historico'}); await g('PATCH',rng('Historico','A1:D1'),{values:[['Data e hora','Quem','Ação','Detalhe']]}); n=1 }
       await g('PATCH',rng('Historico',`A${n+1}:D${n+fila.length}`),{values:fila});
     }
-    const it2=await gItem(); ITEM.mod=it2.mod; ITEM.quem=it2.quem; if(!SUJO.size) await gLer(false); plInfo(); toast('Salvo na planilha.');
+    const it2=await gItem(); ITEM.mod=it2.mod; ITEM.quem=it2.quem; if(!SUJO.size&&!editando()) await gLer(false); plInfo(); toast('Salvo na planilha.');
   }catch(e){ ks.forEach(k=>SUJO.add(k)); $('plInfo').textContent='Não salvo'; aviso('Não foi possível salvar na planilha',[e.message,'As alterações continuam na tela. Toque em "Atualizar" para descartar ou tente de novo em instantes.']); }
   GRAVANDO=false;
 }
@@ -753,7 +753,7 @@ async function useGraph(){
     $('plAbrir').href=ITEM.webUrl; $('plAbrir').hidden=false; $('plAtual').hidden=false;
     $('plAtual').onclick=async()=>{try{const m=await gItem(); if(m.mod===ITEM.mod&&!SUJO.size){toast('Nenhuma alteração desde a última leitura.');return} ITEM.mod=m.mod;ITEM.quem=m.quem; SUJO.clear(); await gLer(true); plInfo()}catch(e){toast(e.message)}};
     await gLer(false); plInfo(); posCarga();
-    setInterval(async()=>{ if(GRAVANDO||SUJO.size) return; try{const m=await gItem(); if(m.mod!==ITEM.mod){ITEM.mod=m.mod;ITEM.quem=m.quem; await gLer(!souEu(m.quem)); plInfo()}}catch(e){} },VERIFICAR_SEG*1000);
+    setInterval(async()=>{ if(GRAVANDO||SUJO.size||editando()) return; try{const m=await gItem(); if(m.mod!==ITEM.mod){ITEM.mod=m.mod;ITEM.quem=m.quem; await gLer(!souEu(m.quem)); plInfo()}}catch(e){} },VERIFICAR_SEG*1000);
   }catch(e){
     const msg=e.status===404||e.status===400?'Planilha não encontrada no endereço configurado.':(e.status===403||e.status===401)?'Sua conta não tem permissão para abrir a planilha. Peça acesso a quem cuida da escala.':e.message;
     $('painel').innerHTML=`<h2>Não foi possível abrir a planilha</h2><p class="ro-aviso">${esc(msg)}</p><p class="note">Planilha configurada: ${esc(decodeURIComponent(CFG.planilha))}</p>`;
@@ -937,7 +937,18 @@ $('iSug').addEventListener('click',e=>{
     $('iSug').hidden=true; syncForm(); renderLista(); toast(`Editando ${c.nome}.`); return}
   if(e.target.closest('button[data-novo]')){$('iSug').hidden=true;$('iNome').setAttribute('aria-expanded','false');$('iSetor').focus();toast('Escolha o setor e as opções, depois toque em Adicionar.')}
 });
-$('iIni').addEventListener('change',e=>{st.form.inicio=e.target.value;syncForm()});
+$('iIni').addEventListener('input',e=>{st.form.inicio=e.target.value});
+$('iIni').addEventListener('blur',e=>{st.form.inicio=e.target.value;syncForm()});
+const editando=()=>{const a=document.activeElement;return !!a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)};
+$('painel').addEventListener('focusout',async e=>{
+  const t=e.target; if(!t.classList||!t.classList.contains('iniSel')) return;
+  const raw=colabs.find(c=>c.id===t.dataset.id); if(!raw) return;
+  if(!/^\d{2}:\d{2}$/.test(t.value)){t.value=raw.inicio||params.inicio;return}
+  const nv=t.value===params.inicio?'':t.value; if((raw.inicio||'')===nv) return;
+  const d=Object.assign({},raw); delete d.id; d.inicio=nv;
+  try{await salvarColab(d,raw.id);toast('Entrada atualizada.')}catch(err){toast('Não foi possível salvar.');render()}
+});
+$('painel').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList&&e.target.classList.contains('iniSel')) e.target.blur()});
 $('iSetor').addEventListener('change',e=>{st.form.setor=e.target.value;syncForm()});
 $('iFolga').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=Number(b.dataset.d);st.form.folga=d;
   if(d===5&&st.form.trabSab==='sim') st.form.trabSab='auto'; if(d>=0&&d<5&&st.form.trabSab==='nao') st.form.trabSab='auto'; syncForm()});
@@ -1282,6 +1293,7 @@ $('painel').addEventListener('change',async e=>{
   if(t.id==='bkAlvo'){st.bulk.alvo=t.value;return}
   if(t.id==='bkAlvo'){st.bulk.alvo=t.value;return}
   if(t.id==='bkModo'){st.bulk.modo=t.value;return}
+  if(t.classList.contains('iniSel')) return;
   if(t.classList.contains('fgSel')||t.classList.contains('iniSel')){
     const raw=colabs.find(c=>c.id===t.dataset.id); if(!raw) return;
     const d=Object.assign({},raw); delete d.id;
