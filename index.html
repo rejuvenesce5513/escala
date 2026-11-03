@@ -499,7 +499,8 @@ function resolver(lista,extra){
   }
   return lista.map(c=>{const r=res.get(c.id);
     const modo=['meio','int','40'].includes(c.sabado)?c.sabado:(c.compHoras>0?'meio':'int');
-    return Object.assign({},c,{folga:r.folga,folgaAuto:r.auto,inviavel:!!r.inviavel,modo})});
+    const sx=SMAP[c.setor]||(extra&&extra[c.setor]); const fechado=!!sx&&!sx.sab&&c.trabSab!=='sim';
+    return Object.assign({},c,{folga:fechado?5:r.folga,folgaAuto:fechado?false:r.auto,inviavel:fechado?false:!!r.inviavel,modo,sabFechado:fechado,rodizio:fechado?false:c.rodizio})});
 }
 function cobertura(lista,extra){
   const out=[]; const por={};
@@ -512,8 +513,8 @@ function cobertura(lista,extra){
 // ---------- armazenamento ----------
 const LS_C='escala5x2.colabs', LS_P='escala5x2.params', LS_S='escala5x2.setores', LS_H='escala5x2.hist', LS_V='escala5x2.versao', LS_VISTO='escala5x2.vistoEm';
 // ---------- versão, usuário, histórico ----------
-const APP_VER='2026-11-02.gh4';
-const NOVIDADES=['Correção: quem tem folga base no sábado e está no rodízio agora pode escolher Meio sábado + compensação.','Na visão por equipe, o botão "Folgas automáticas (rodízio)" coloca no rodízio todos que estavam com folga fixa, mantendo os dias atuais.'];
+const APP_VER='2026-11-02.gh5';
+const NOVIDADES=['Correção: ao fechar o sábado de um setor, todos do setor passam a trabalhar de segunda a sexta (8h24 por dia), sem rodízio. Ao reabrir, as folgas e o rodízio anteriores voltam.','Só continua escalado no sábado quem estiver marcado como "Trabalha no sábado: Sim"; essas pessoas aparecem com o alerta "Setor não abre sábado".'];
 let ultimoLocal=0;
 let USER=null, ME=null, RO=false, HIST=null, HIST_LOADING=false, NOMES={}, marcadorOk=false, carregado=false;
 async function initUser(){
@@ -1080,7 +1081,8 @@ function viewEquipe(){
   ${exportHTML()}
   ${arr.length?`<div class="scroll"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`:'<p class="empty">Nenhum colaborador lançado neste setor.</p>'}`;
 }
-function fgOpts(c){const v=(c.folgaAuto||c.rodizio)?-1:c.folga;
+function fgOpts(c){if(c.sabFechado) return `<option value="-1" selected>Sábado (setor fechado)</option>`;
+const v=(c.folgaAuto||c.rodizio)?-1:c.folga;
   return `<option value="-1"${v===-1?' selected':''}>${c.rodizio&&!c.folgaAuto?'Rodízio (base '+DIAS[c.folga]+')':'Folga automática ('+DIAS[c.folga]+')'}</option>`+DIAS.slice(0,6).map((d,i)=>`<option value="${i}"${v===i?' selected':''}>Folga fixa: ${DIAS_L[i]}</option>`).join('');}
 function presRow(arr,s,extraCols){return DIAS.slice(0,6).map((d,i)=>{const p=arr.filter(c=>presente(c,i)).length;const opera=i<5||s.sab;const zero=arr.length&&opera&&p<Math.ceil(arr.length/2);return `<td class="c${zero?' zero':''}">${!opera&&p===0?'<span class="offt">fechado</span>':p}</td>`}).join('')}
 function viewGeral(){
@@ -1137,7 +1139,7 @@ function folgasSemana(w){
     const por={}; EF.forEach(c=>{if((c.folgaAuto||c.rodizio)&&c.trabSab!=='sim'&&c.trabSab!=='nao')(por[c.setor]=por[c.setor]||[]).push(c)});
     for(const k in por){const arr=por[k].slice().sort((a,b)=>(a.criadoEm||0)-(b.criadoEm||0)||String(a.id).localeCompare(String(b.id)));const F=arr.map(c=>c.folga),n=arr.length;arr.forEach((c,i)=>m.set(c.id,F[(((i+w)%n)+n)%n]))}
   }
-  EF.forEach(c=>{if(c.trocas&&c.trocas[w]!==undefined&&c.trocas[w]!==null) m.set(c.id,Number(c.trocas[w]))});
+  EF.forEach(c=>{if(c.sabFechado) return; if(c.trocas&&c.trocas[w]!==undefined&&c.trocas[w]!==null) m.set(c.id,Number(c.trocas[w]))});
   return m;
 }
 function montarMes(lista){
