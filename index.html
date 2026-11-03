@@ -470,7 +470,8 @@ function jornada(c){
   if(dias.some(x=>x.trab&&(x.ini<ab||x.fim>fe+0.5))) alertas.push({t:'Fora do horário da clínica',k:'warn'});
   return {dias,total,alertas};
 }
-function compTxt(c){return c.modo==='40'?'40h':c.folga===5?'':c.modo==='meio'?'meio sábado compensado':'sábado integral'}
+function podeSab(c){const st0=SMAP[c.setor];if(c.trabSab==='nao')return false;if(c.trabSab==='sim')return true;return (!st0||st0.sab)&&(c.folga!==5||c.rodizio||c.folgaAuto)}
+function compTxt(c){return c.modo==='40'?'40h':!podeSab(c)?'':c.modo==='meio'?'meio sábado compensado':'sábado integral'}
 function presente(c,d){return d!==6 && d!==c.folga}
 // Folga automática: distribui por equipe com no mínimo 50% presente em cada dia de operação
 function resolver(lista,extra){
@@ -511,8 +512,8 @@ function cobertura(lista,extra){
 // ---------- armazenamento ----------
 const LS_C='escala5x2.colabs', LS_P='escala5x2.params', LS_S='escala5x2.setores', LS_H='escala5x2.hist', LS_V='escala5x2.versao', LS_VISTO='escala5x2.vistoEm';
 // ---------- versão, usuário, histórico ----------
-const APP_VER='2026-11-02.gh3';
-const NOVIDADES=['Feriados: no mapa mensal o dia aparece em vermelho com F (feriado) e não conta como trabalho. A folga passou a ser D.','Se o feriado cair no sábado, quem faz meio sábado não compensa as horas de segunda a sexta daquela semana.','Sábado começa sempre às 08:00, independente do horário de entrada nos outros dias.'];
+const APP_VER='2026-11-02.gh4';
+const NOVIDADES=['Correção: quem tem folga base no sábado e está no rodízio agora pode escolher Meio sábado + compensação.','Na visão por equipe, o botão "Folgas automáticas (rodízio)" coloca no rodízio todos que estavam com folga fixa, mantendo os dias atuais.'];
 let ultimoLocal=0;
 let USER=null, ME=null, RO=false, HIST=null, HIST_LOADING=false, NOMES={}, marcadorOk=false, carregado=false;
 async function initUser(){
@@ -1071,7 +1072,7 @@ function viewEquipe(){
   if(!sid) return `<h2>Visão por equipe</h2><p class="empty">Lance colaboradores para ver a escala da equipe.</p>`;
   const s=SMAP[sid]; if(!s) return '<h2>Visão por equipe</h2><p class="empty">Setor não encontrado.</p>'; const arr=ordenar(EF.filter(c=>c.setor===sid));
   const head=`<tr><th>Colaborador</th>${DIAS.map(d=>`<th class="c">${d}</th>`).join('')}<th class="c">Semana</th></tr>`;
-  const body=arr.map(c=>{const j=jornada(c);return `<tr><td><b>${esc(c.nome)}</b><br><select class="fgSel" data-id="${c.id}" aria-label="Folga de ${esc(c.nome)}">${fgOpts(c)}</select><br><input type="time" class="iniSel" data-id="${c.id}" value="${c.inicio||params.inicio}" aria-label="Entrada de ${esc(c.nome)}"><br><select class="compSel" data-id="${c.id}" aria-label="Jornada de ${esc(c.nome)}">${compOpts(modoDe(c),c.folga===5)}</select><br><select class="tsSel" data-id="${c.id}" aria-label="Sábado de ${esc(c.nome)}">${tsOpts(c.trabSab||'auto')}</select><br>${tags(j.alertas)}</td>${j.dias.map(x=>`<td class="c">${cellHTML(x)}</td>`).join('')}<td class="c"><b>${dur(j.total)}</b></td></tr>`}).join('');
+  const body=arr.map(c=>{const j=jornada(c);return `<tr><td><b>${esc(c.nome)}</b><br><select class="fgSel" data-id="${c.id}" aria-label="Folga de ${esc(c.nome)}">${fgOpts(c)}</select><br><input type="time" class="iniSel" data-id="${c.id}" value="${c.inicio||params.inicio}" aria-label="Entrada de ${esc(c.nome)}"><br><select class="compSel" data-id="${c.id}" aria-label="Jornada de ${esc(c.nome)}">${compOpts(modoDe(c),!podeSab(c))}</select><br><select class="tsSel" data-id="${c.id}" aria-label="Sábado de ${esc(c.nome)}">${tsOpts(c.trabSab||'auto')}</select><br>${tags(j.alertas)}</td>${j.dias.map(x=>`<td class="c">${cellHTML(x)}</td>`).join('')}<td class="c"><b>${dur(j.total)}</b></td></tr>`}).join('');
   const foot=`<tr><td>Presentes</td>${DIAS.map((d,i)=>{const p=i===6?0:arr.filter(c=>presente(c,i)).length;const zero=arr.length&&p<Math.ceil(arr.length/2)&&(i<5||(i===5&&s.sab));return `<td class="c${zero?' zero':''}">${i===6?'0':p}</td>`}).join('')}<td></td></tr>`;
   return `<h2>${esc(s.nome)}</h2>
   <div style="margin:-6px 0 12px"><span class="tag ok">${arr.length} ${arr.length===1?'colaborador':'colaboradores'}</span> <span class="tag">Mínimo ${Math.ceil(arr.length/2)} por dia</span> <button class="btn ghost small" data-add="${s.id}">Adicionar nesta equipe</button> <button class="btn ghost small" data-autoall="${s.id}" title="Devolve todas as folgas da equipe ao cálculo automático">Folgas automáticas (rodízio)</button> <button class="btn ghost small" data-setsab="${s.id}" aria-pressed="${s.sab}">Equipe trabalha no sábado: ${s.sab?'Sim':'Não'}</button></div>
@@ -1197,7 +1198,7 @@ function viewLista(){
     <td><input type="text" class="nomeSel" data-id="${c.id}" value="${esc(c.nome)}" maxlength="80" aria-label="Nome"></td>
     <td><select class="setSel" data-id="${c.id}" aria-label="Setor de ${esc(c.nome)}">${optSet(c)}</select></td>
     <td><select class="fgSel" data-id="${c.id}" aria-label="Folga de ${esc(c.nome)}">${fgOpts(c)}</select></td>
-    <td><select class="compSel" data-id="${c.id}" aria-label="Jornada de ${esc(c.nome)}">${compOpts(modoDe(c),c.folga===5)}</select></td>
+    <td><select class="compSel" data-id="${c.id}" aria-label="Jornada de ${esc(c.nome)}">${compOpts(modoDe(c),!podeSab(c))}</select></td>
     <td><input type="time" class="iniSel" data-id="${c.id}" value="${c.inicio||params.inicio}" aria-label="Entrada de ${esc(c.nome)}"></td>
     <td><select class="tsSel" data-id="${c.id}" aria-label="Sábado de ${esc(c.nome)}">${tsOpts(c.trabSab||'auto')}</select></td>
     <td class="c"><b>${dur(j.total)}</b><div class="sm">${u?clock(u.ini)+' às '+clock(u.fim):''}${sb.trab?'<br>sáb '+clock(sb.ini)+' às '+clock(sb.fim):''}</div></td>
@@ -1277,7 +1278,7 @@ function textoMes(lista){
 // ---------- compensação no painel ----------
 const MODOS=[['int','Sábado integral (42h)'],['meio','Meio sábado + compensação (42h)'],['40','40h (8h por dia)']];
 const MODOS_SEG_SEX=[['int','42h (8h24 por dia)'],['40','40h (8h por dia)']];
-function modoDe(c){return c.folga===5&&c.modo==='meio'?'int':c.modo}
+function modoDe(c){return !podeSab(c)&&c.modo==='meio'?'int':c.modo}
 function compOpts(m,segSex){return (segSex?MODOS_SEG_SEX:MODOS).map(([v,t])=>`<option value="${v}"${v===m?' selected':''}>${t}</option>`).join('')}
 function dadosModo(raw,m){const r=Object.assign({},raw);delete r.id;delete r.compensa;delete r.compHoras;return Object.assign(r,{sabado:m})}
 st.bulk={alvo:'todos',modo:'int'};
@@ -1331,6 +1332,11 @@ async function gravarSab(s,val){
 }
 $('painel').addEventListener('click',async e=>{
   const aa=e.target.closest('button[data-autoall]');
+  if(aa&&store&&store.kind==='graph'){const sid=aa.dataset.autoall; const fix=colabs.filter(c=>c.setor===sid&&!c.rodizio&&c.trabSab!=='nao'&&c.trabSab!=='sim');
+    if(!fix.length){toast('Todos desta equipe já estão no rodízio.');return}
+    if(!confirm(`Colocar no rodízio ${fix.length} ${fix.length===1?'colaborador':'colaboradores'} com folga fixa? Os dias de folga atuais são mantidos como ponto de partida.`)) return;
+    fix.forEach(c=>{c.rodizio=true}); render(); sujo('colabs'); registrar('Rodízio',`${nomeSetor(sid)}: ${fix.map(c=>c.nome).join(', ')} entraram no rodízio`); toast(`${fix.length} no rodízio.`);
+    return;}
   if(aa){const sid=aa.dataset.autoall; const fix=colabs.filter(c=>c.setor===sid&&c.folga>=0);
     if(!fix.length){toast('Todas as folgas desta equipe já são automáticas.');return}
     if(!confirm(`Devolver ao cálculo automático as ${fix.length} folgas fixas desta equipe?`)) return;
@@ -1353,7 +1359,7 @@ $('painel').addEventListener('click',async e=>{
   const b=e.target.closest('button[data-bulk]'); if(!b) return;
   const sid=b.dataset.bulk, m=st.bulk.modo;
   const alvo=EF.filter(c=>c.setor===sid&&(st.bulk.alvo==='todos'||(st.bulk.alvo==='sab'?c.folga!==5:c.folga===5)));
-  const muda=alvo.filter(c=>modoDe(c)!==(c.folga===5&&m==='meio'?'int':m));
+  const muda=alvo.filter(c=>modoDe(c)!==(!podeSab(c)&&m==='meio'?'int':m));
   if(!muda.length){toast('Todos já estão nesse formato.');return}
   const rot=(MODOS.find(x=>x[0]===m)||[0,m])[1];
   if(!confirm(`Aplicar "${rot}" a ${muda.length} ${muda.length===1?'colaborador':'colaboradores'} de ${SMAP[sid].nome}?`)) return;
