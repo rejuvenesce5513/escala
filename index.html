@@ -48,7 +48,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px}
 .seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-weight:500}
 .seg button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
-select,input[type=text],input[type=time],input[type=number]{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+select,input[type=text],input[type=email],input[type=search],input[type=time],input[type=number]{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
 .filters select{min-width:150px}
 
 .days{display:grid;grid-template-columns:repeat(7,minmax(74px,1fr));gap:6px;padding-bottom:12px;overflow-x:auto}
@@ -156,6 +156,16 @@ table.mes .stick{position:sticky;left:0;background:var(--surface);z-index:1;min-
 table.mes td.md[data-c]{cursor:pointer}
 table.mes td.md[data-c]:hover{outline:2px solid var(--brand);outline-offset:-2px}
 table.mes td.md.troca{box-shadow:inset 0 0 0 2px var(--warn)}
+table.mes td.md[data-r]{cursor:pointer}
+table.mes td.md[data-r]:hover{outline:2px solid var(--brand);outline-offset:-2px}
+table.mes td.md.pend{box-shadow:inset 0 0 0 2px var(--bar-sat);background-image:repeating-linear-gradient(45deg,transparent 0 4px,var(--brand-soft) 4px 8px)}
+.pchk{display:flex;flex-wrap:wrap;gap:4px 12px}
+.pchk label{display:flex;gap:5px;align-items:center;font-size:.8rem;white-space:nowrap}
+.tperfis{min-width:760px}
+.tperfis td{vertical-align:top}
+.tsol{min-width:900px}
+.tsol td{font-size:.84rem;vertical-align:top}
+.perfil-tag{font-weight:600;color:var(--brand)}
 .grid.wide{grid-template-columns:1fr;max-width:none}
 .grid.wide>section:first-child{display:none}
 #dlgFg .row{flex-direction:column;align-items:stretch}
@@ -167,7 +177,7 @@ table.mes tr.sec td.stick{background:var(--brand-soft)}
 .sugest .meta{display:block;font-size:.75rem;color:var(--ink-2)}
 .sugest .novo{color:var(--brand);font-weight:600}
 .sugest .vazio{padding:7px 8px;font-size:.82rem;color:var(--ink-2)}
-.tlista{min-width:1120px}
+.tlista{min-width:1320px}
 .tlista td{vertical-align:middle;padding:6px 5px}
 .tlista select,.tlista input{width:100%;min-height:32px;padding:4px 6px;font-size:.82rem}
 .tlista .nomeSel{min-width:200px;font-weight:600}
@@ -282,6 +292,7 @@ function(e){return e.hasOwnProperty("tenant_discovery_endpoint")&&e.hasOwnProper
     <div class="titlebar">
       <h1>Escala 5x2 a partir de 15/12/2026</h1>
       <span class="sub" id="plInfo">Domingo é folga fixa de todos.</span>
+      <span class="sub" id="perfilInfo" hidden></span>
       <span class="row"><button class="btn ghost small" id="plAtual" hidden>Atualizar</button><a class="btn ghost small" id="plAbrir" target="_blank" rel="noopener" hidden>Abrir planilha</a><button class="btn ghost small" id="plSair" hidden>Sair</button></span>
     </div>
     <div class="filters">
@@ -293,6 +304,8 @@ function(e){return e.hasOwnProperty("tenant_discovery_endpoint")&&e.hasOwnProper
         <button data-view="mensal" aria-pressed="false">Mensal</button>
         <button data-view="setores" aria-pressed="false">Setores</button>
         <button data-view="hist" aria-pressed="false">Histórico</button>
+        <button data-view="solic" aria-pressed="false" hidden>Solicitações</button>
+        <button data-view="perfis" aria-pressed="false" hidden>Perfis de acesso</button>
       </div>
       <select id="fSetor" aria-label="Setor"></select>
       <select id="fColab" aria-label="Colaborador"></select>
@@ -350,11 +363,11 @@ function(e){return e.hasOwnProperty("tenant_discovery_endpoint")&&e.hasOwnProper
       <p class="lbl" style="margin:0 0 8px">A lista completa, com edição direto na tabela, fica na aba Colaboradores.</p>
       <button class="btn ghost small" id="bVerLista">Abrir lista de colaboradores</button>
       <ul class="list" id="lista" hidden></ul>
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="margin-top:10px" id="rowSeed">
         <button class="btn ghost small" id="bSeed">Gerar posições da escala proposta</button>
       </div>
 
-      <div class="imp" aria-labelledby="impTitle">
+      <div class="imp" id="boxImp" aria-labelledby="impTitle">
         <h2 id="impTitle">Importar em massa</h2>
         <p>Preencha a planilha modelo e envie aqui. Aceita .xlsx e .csv. Setores que não existem são criados quando a coluna Setor abre sábado estiver preenchida.</p>
         <div class="row" style="margin-bottom:10px"><button class="btn ghost small" id="bModelo" hidden>Baixar planilha modelo</button></div>
@@ -364,7 +377,7 @@ function(e){return e.hasOwnProperty("tenant_discovery_endpoint")&&e.hasOwnProper
         <button class="btn" id="bImportar" disabled>Importar</button>
       </div>
 
-      <details class="params">
+      <details class="params" id="boxParams">
         <summary>Parâmetros da jornada</summary>
         <div class="pgrid">
           <div class="field"><label for="pIni">Entrada padrão</label><input type="time" id="pIni"></div>
@@ -513,9 +526,10 @@ function cobertura(lista,extra){
 // ---------- armazenamento ----------
 const LS_C='escala5x2.colabs', LS_P='escala5x2.params', LS_S='escala5x2.setores', LS_H='escala5x2.hist', LS_V='escala5x2.versao', LS_VISTO='escala5x2.vistoEm';
 // ---------- versão, usuário, histórico ----------
-const APP_VER='2026-11-02.gh5';
-const NOVIDADES=['Correção: ao fechar o sábado de um setor, todos do setor passam a trabalhar de segunda a sexta (8h24 por dia), sem rodízio. Ao reabrir, as folgas e o rodízio anteriores voltam.','Só continua escalado no sábado quem estiver marcado como "Trabalha no sábado: Sim"; essas pessoas aparecem com o alerta "Setor não abre sábado".'];
+const APP_VER='2026-11-12.perfis';
+const NOVIDADES=['Perfis de acesso: Administrador vê e edita todos os setores; Liderança vê e edita só os setores que lidera; os demais usuários veem os próprios dados e a escala mensal da equipe.','Usuários podem sugerir outro dia de folga tocando no dia na aba Mensal. A troca só vale depois que a liderança do setor aprovar na aba Solicitações.','Correção: ao fechar o sábado de um setor, todos do setor passam a trabalhar de segunda a sexta (8h24 por dia), sem rodízio. Ao reabrir, as folgas e o rodízio anteriores voltam.','Só continua escalado no sábado quem estiver marcado como "Trabalha no sábado: Sim"; essas pessoas aparecem com o alerta "Setor não abre sábado".'];
 let ultimoLocal=0;
+let ROLE='admin', SEED_TENT=false, PERFIL=null, PERFIS=null, PERFIS_ABA=false, LIDER_SET=new Set(), MEU_ID=null, SOL=null, PODE_EDITAR_PLANILHA=true;
 let USER=null, ME=null, RO=false, HIST=null, HIST_LOADING=false, NOMES={}, marcadorOk=false, carregado=false;
 async function initUser(){
   try{ if(window.claude&&typeof window.claude.use==='function') USER=await window.claude.use('user') }catch(e){USER=null}
@@ -532,7 +546,7 @@ const ROT_J={int:'Integral',meio:'Meio sábado',40:'40h'}, ROT_TS={auto:'Automá
 function semanaTxt(w){const x=new Date(Date.UTC(2026,11,14)+Number(w)*7*864e5);return String(x.getUTCDate()).padStart(2,'0')+'/'+String(x.getUTCMonth()+1).padStart(2,'0')}
 function diffColab(a,b){
   a=a||{}; b=b||{}; const out=[];
-  const F={nome:['Nome',v=>v||''],setor:['Setor',v=>nomeSetor(v)],folga:['Folga',v=>v>=0?DIAS_L[v]:'automática'],sabado:['Jornada',v=>ROT_J[v]||'Integral'],trabSab:['Trabalha sábado',v=>ROT_TS[v||'auto']],inicio:['Entrada',v=>v||'padrão']};
+  const F={nome:['Nome',v=>v||''],email:['E-mail',v=>v||''],setor:['Setor',v=>nomeSetor(v)],folga:['Folga',v=>v>=0?DIAS_L[v]:'automática'],sabado:['Jornada',v=>ROT_J[v]||'Integral'],trabSab:['Trabalha sábado',v=>ROT_TS[v||'auto']],inicio:['Entrada',v=>v||'padrão']};
   for(const k in F){const va=F[k][1](a[k]), vb=F[k][1](b[k]); if(String(va)!==String(vb)) out.push(`${F[k][0]}: ${va} → ${vb}`)}
   const ta=a.trocas||{}, tb=b.trocas||{};
   new Set([...Object.keys(ta),...Object.keys(tb)]).forEach(w=>{ if(ta[w]===tb[w]) return;
@@ -616,15 +630,16 @@ async function posCarga(){
   if(RO) render();
   let visto=Number(lsGet(LS_VISTO,0))||0; const agora=Date.now();
   if(lsGet(LS_V,'')!==APP_VER){ lsSet(LS_V,APP_VER); aviso('Novidades desta versão da escala',NOVIDADES); }
-  if(visto){ await carregarHist(); const novos=(HIST||[]).filter(h=>h.ts>visto&&!(ME&&h.autor===ME.id));
+  if(visto&&ROLE==='admin'){ await carregarHist(); const novos=(HIST||[]).filter(h=>h.ts>visto&&!(ME&&h.autor===ME.id));
     if(novos.length) setTimeout(()=>aviso(`Alterações desde sua última visita (${fmtData(visto)})`,novos.map(h=>`${fmtData(h.ts)} · ${autorTxt(h.autor)} · ${h.acao}: ${h.detalhe}`)),$('dlgAviso').open?0:0); }
   lsSet(LS_VISTO,agora);
 }
 function aplicarRO(){
   if(!RO) return;
-  const sel='.fgSel,.iniSel,.compSel,.tsSel,.setSel,.nomeSel,.sRen,#sNome,#sSab,#sCriar,#bkModo,#bkAlvo,#mRod,[data-setsab],[data-sabtodos],[data-sdel],[data-srest],[data-autoall],[data-add],[data-bulk],[data-lnovo],[data-lact="del"]';
+  const sel='.fgSel,.iniSel,.compSel,.tsSel,.setSel,.nomeSel,.emailSel,.pfSel,.pfSet,#pfEmail,#pfPerfil,#pfAdd,[data-pnew],[data-pdel],[data-sdec],.sRen,#sNome,#sSab,#sCriar,#bkModo,#bkAlvo,#mRod,[data-setsab],[data-sabtodos],[data-sdel],[data-srest],[data-autoall],[data-add],[data-bulk],[data-lnovo],[data-lact="del"]';
   $('painel').querySelectorAll(sel).forEach(x=>{x.disabled=true});
   $('painel').querySelectorAll('td[data-c]').forEach(x=>{x.removeAttribute('data-c');x.removeAttribute('title')});
+  if(ROLE==='user'){ if(!$('painel').querySelector('.ro-aviso')) $('painel').insertAdjacentHTML('afterbegin','<p class="ro-aviso">Perfil Usuário: você vê os seus dados e a escala mensal da sua equipe. Para pedir outro dia de folga, abra a aba Mensal e toque no dia desejado na sua linha. A troca só vale depois que a liderança aprovar.</p>'); return }
   if(!$('painel').querySelector('.ro-aviso')) $('painel').insertAdjacentHTML('afterbegin',store&&store.kind==='graph'?'<p class="ro-aviso">Você tem permissão só de leitura na planilha. Para alterar a escala, peça acesso de edição à planilha a quem cuida da escala.</p>':'<p class="ro-aviso">Você tem acesso somente de visualização. Para alterar a escala, peça acesso de edição a quem compartilhou.</p>');
 }
 function lsGet(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
@@ -641,8 +656,21 @@ function useLocal(){
 const CFG={
   clientId:'003f2147-1698-4f0b-91e1-a92c94143f90',   // ID do aplicativo (cliente)
   tenantId:'89aed341-1dc6-4d0d-b5c7-e8df4293d21d',   // ID do diretório (locatário)
-  planilha:'https://rejuvenesce.sharepoint.com/Documentos%20Compartilhados/Escala%205x2%20-%20Clinica%20Rejuvenesce.xlsx'
+  planilha:'https://rejuvenesce.sharepoint.com/Documentos%20Compartilhados/Escala%205x2%20-%20Clinica%20Rejuvenesce.xlsx',
+  // Opcional: planilha separada só para as solicitações de folga. Recomendado, para que os usuários tenham
+  // permissão de edição apenas nela e somente leitura na planilha da escala. Em branco usa a própria planilha da escala.
+  solicitacoes:''
 };
+// Perfis iniciais. Valem enquanto a aba "Perfis" da planilha não existir ou estiver vazia.
+// Depois, o cadastro é feito pela aba "Perfis de acesso" do painel (somente administradores).
+const PERFIS_PADRAO=[
+  {email:'francis.arantes@clinicarejuvenesce.com.br',perfil:'admin',setores:[]},
+  {email:'raissa.fortini@clinica.rejuvenesce.br',perfil:'admin',setores:[]},
+  {email:'fabricio.araujo@clinicarejuvenesce.com.br',perfil:'admin',setores:[]},
+  {email:'camila.espinula@clinicarejuvenesce.com.br',perfil:'lider',setores:[]},
+  {email:'samuel.nascimento@clinicarejuvenesce.com.br',perfil:'lider',setores:[]},
+  {email:'carlos.roberto@clinicarejuvenesce.com.br',perfil:'lider',setores:[]}
+];
 const VERIFICAR_SEG=60;
 // ========================================================
 let MSALI=null, CONTA=null, ITEM=null, PODE_EDITAR=false, SUJO=new Set(), FLUSH_T=null, GRAVANDO=false, HQ=[];
@@ -674,7 +702,7 @@ const gData=v=>{if(typeof v==='number')return Math.round((v-25569)*864e5);const 
 const gSerial=t=>t/864e5+25569;
 const REF0=Date.UTC(2026,11,14);
 async function gLer(avisar){
-  const [pr,se,co,tr]=await Promise.all([gVal('Parametros','A1:B13'),gVal('Setores','A1:B41'),gVal('Colaboradores','A1:V201'),gVal('Trocas','A1:C500')]);
+  const [pr,se,co,tr,pf]=await Promise.all([gVal('Parametros','A1:B13'),gVal('Setores','A1:B41'),gVal('Colaboradores','A1:W201'),gVal('Trocas','A1:C500'),gVal('Perfis','A1:C101')]);
   if(!pr||!se||!co) throw new Error('A planilha não tem as abas Parametros, Setores e Colaboradores.');
   const par=t=>{const r=pr.find(x=>norm(x[0]).startsWith(norm(t)));return r?r[1]:''};
   const ent=gMin(par('Entrada padrão')),ab=gMin(par('Clínica abre')),fe=gMin(par('Clínica fecha'));
@@ -686,13 +714,15 @@ async function gLer(avisar){
   const nc=[], porNome=new Map();
   co.slice(1).forEach((r,i)=>{const nome=String(r[0]).trim(); if(!nome) return; const sn=String(r[1]).trim();
     if(sn&&!idDe.has(norm(sn))){const id='sx'+ns.length;idDe.set(norm(sn),id);ns.push({id,nome:sn,sab:true})}
-    const e=gMin(r[4]); const c={id:'r'+i,nome,setor:idDe.get(norm(sn))||'',folga:D.indexOf(norm(r[2])),sabado:J[norm(r[3])]||'int',trabSab:TS[norm(r[21])]||'auto',inicio:isNaN(e)?'':gHHMM(e),rodizio:norm(r[5])==='sim',criadoEm:i,trocas:{}};
+    const e=gMin(r[4]); const c={id:'r'+i,nome,setor:idDe.get(norm(sn))||'',folga:D.indexOf(norm(r[2])),sabado:J[norm(r[3])]||'int',trabSab:TS[norm(r[21])]||'auto',inicio:isNaN(e)?'':gHHMM(e),rodizio:norm(r[5])==='sim',criadoEm:i,trocas:{}}; const em=normEmail(r[22]); if(em) c.email=em;
     nc.push(c); porNome.set(norm(nome),c)});
   (tr||[]).slice(1).forEach(r=>{const c=porNome.get(norm(r[0])); const t=gData(r[1]); const d=D.indexOf(norm(r[2])); if(!c||isNaN(t)||d<0) return; c.trocas[Math.floor((t-REF0)/(7*864e5))]=d});
   const antes=colabs;
   BASE_SETORES.splice(0); custom=ns; rebuildSetores(); fillParams(); colabs=nc;
+  lerPerfis(pf); calcPerfil();
   render();
-  if(avisar&&antes.length){const m=diffListas(antes,colabs); if(m.length) aviso('A escala foi atualizada na planilha'+(ITEM&&ITEM.quem?' por '+ITEM.quem:''),m)}
+  if(!PERFIS_ABA&&!SEED_TENT&&ROLE==='admin'&&PODE_EDITAR_PLANILHA){SEED_TENT=true; gGravarPerfis(PERFIS).then(()=>registrar('Perfis de acesso','Aba Perfis criada com os perfis iniciais')).catch(()=>{})}
+  if(avisar&&antes.length){const vis=c=>podeVerSetor(c.setor); const m=diffListas(antes.filter(vis),colabs.filter(vis)); if(m.length) aviso('A escala foi atualizada na planilha'+(ITEM&&ITEM.quem?' por '+ITEM.quem:''),m)}
 }
 function sujo(k){if(RO)return; SUJO.add(k); clearTimeout(FLUSH_T); FLUSH_T=setTimeout(gGravar,800); $('plInfo').textContent='Salvando na planilha…'}
 function souEu(nome){const a=CONTA&&(CONTA.name||'');return !!nome&&!!a&&norm(nome)===norm(a)}
@@ -711,10 +741,10 @@ async function gGravar(){
       const L=colabs.slice(); if(L.length>200) throw new Error('Limite de 200 colaboradores na planilha.');
       const JR={int:'Integral',meio:'Meio sábado','40':'40h'}, TSR={sim:'Sim',nao:'Não'};
       const A=L.map(c=>[c.nome,nomeSetor(c.setor),DIAS[c.folga]||'',JR[c.sabado]||'Integral',c.inicio?gFrac(c.inicio):'',c.rodizio?'Sim':'Não']);
-      const V=[['Trabalha sábado (painel)']].concat(L.map(c=>[TSR[c.trabSab]||'']));
-      while(A.length<200) A.push(['','','','','','']); while(V.length<201) V.push(['']);
+      const V=[['Trabalha sábado (painel)','E-mail']].concat(L.map(c=>[TSR[c.trabSab]||'',c.email||'']));
+      while(A.length<200) A.push(['','','','','','']); while(V.length<201) V.push(['','']);
       await g('PATCH',rng('Colaboradores','A2:F201'),{values:A});
-      await g('PATCH',rng('Colaboradores','V1:V201'),{values:V});
+      await g('PATCH',rng('Colaboradores','V1:W201'),{values:V});
       const T=[]; L.forEach(c=>Object.keys(c.trocas||{}).forEach(w=>{const d=c.trocas[w]; if(d==null) return; T.push([c.nome,gSerial(REF0+Number(w)*7*864e5),DIAS[d]])}));
       if(T.length>499) throw new Error('Limite de 499 trocas na planilha.');
       while(T.length<499) T.push(['','','']); await g('PATCH',rng('Trocas','A2:C500'),{values:T});
@@ -743,7 +773,7 @@ function telaLogin(msg){
   $('gEntrar').onclick=()=>MSALI.loginRedirect({scopes:ESCOPOS});
 }
 async function useGraph(){
-  store={kind:'graph'};
+  store={kind:'graph'}; ROLE='user'; aplicarPerfilUI();
   document.querySelector('main .grid').classList.add('wide');
   try{
     MSALI=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:'https://login.microsoftonline.com/'+CFG.tenantId,redirectUri:location.origin+location.pathname},cache:{cacheLocation:'localStorage'}});
@@ -754,11 +784,11 @@ async function useGraph(){
   try{
     const it=await gItem(); ITEM.mod=it.mod; ITEM.quem=it.quem;
     try{const sid=await g('POST',wbp()+'/createSession',{persistChanges:true}); PODE_EDITAR=true; try{await fetch('https://graph.microsoft.com/v1.0'+wbp()+'/closeSession',{method:'POST',headers:{Authorization:'Bearer '+await gToken(),'workbook-session-id':sid.id}})}catch(_){}}catch(e){PODE_EDITAR=false}
-    RO=!PODE_EDITAR;
+    RO=!PODE_EDITAR; PODE_EDITAR_PLANILHA=PODE_EDITAR;
     $('plAbrir').href=ITEM.webUrl; $('plAbrir').hidden=false; $('plAtual').hidden=false;
     $('plAtual').onclick=async()=>{try{const m=await gItem(); if(m.mod===ITEM.mod&&!SUJO.size){toast('Nenhuma alteração desde a última leitura.');return} ITEM.mod=m.mod;ITEM.quem=m.quem; SUJO.clear(); await gLer(true); plInfo()}catch(e){toast(e.message)}};
-    await gLer(false); plInfo(); posCarga();
-    setInterval(async()=>{ if(GRAVANDO||SUJO.size||editando()) return; try{const m=await gItem(); if(m.mod!==ITEM.mod){ITEM.mod=m.mod;ITEM.quem=m.quem; await gLer(!souEu(m.quem)); plInfo()}}catch(e){} },VERIFICAR_SEG*1000);
+    await gLer(false); plInfo(); posCarga(); carregarSol().then(()=>render());
+    setInterval(async()=>{ if(GRAVANDO||SUJO.size||editando()) return; try{const antes=JSON.stringify(SOL); await carregarSol(); if(JSON.stringify(SOL)!==antes&&!editando()) render()}catch(e){} try{const m=await gItem(); if(m.mod!==ITEM.mod){ITEM.mod=m.mod;ITEM.quem=m.quem; await gLer(!souEu(m.quem)); plInfo()}}catch(e){} },VERIFICAR_SEG*1000);
   }catch(e){
     const msg=e.status===404||e.status===400?'Planilha não encontrada no endereço configurado.':(e.status===403||e.status===401)?'Sua conta não tem permissão para abrir a planilha. Peça acesso a quem cuida da escala.':e.message;
     $('painel').innerHTML=`<h2>Não foi possível abrir a planilha</h2><p class="ro-aviso">${esc(msg)}</p><p class="note">Planilha configurada: ${esc(decodeURIComponent(CFG.planilha))}</p>`;
@@ -825,9 +855,11 @@ async function salvarParamsBase(p){
 
 // ---------- formulário ----------
 function fillSetorSelects(){
-  const opts=SETORES.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('');
-  $('iSetor').innerHTML=opts; $('iSetor').value=st.form.setor;
-  $('fSetor').innerHTML=`<option value="">Todos os setores</option>`+opts; $('fSetor').value=st.setor;
+  const op=L=>L.map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('');
+  const ed=setoresEdit(); if(ed.length&&!ed.some(s=>s.id===st.form.setor)) st.form.setor=ed[0].id;
+  $('iSetor').innerHTML=op(ed.length?ed:SETORES); $('iSetor').value=st.form.setor;
+  const sv=setoresVis(); if(st.setor&&!sv.some(s=>s.id===st.setor)) st.setor='';
+  $('fSetor').innerHTML=`<option value="">${ROLE==='admin'?'Todos os setores':'Todos os meus setores'}</option>`+op(sv); $('fSetor').value=st.setor;
 }
 function rebuildSetores(){
   const baseIds=new Set(BASE_SETORES.map(b=>b.id));
@@ -972,6 +1004,7 @@ $('bSalvar').addEventListener('click',async()=>{
   const orig=st.editId&&colabs.find(c=>c.id===st.editId);
   const data={nome,setor:f.setor,folga:f.folga,sabado:f.sabado,trabSab:f.trabSab||'auto',inicio:f.inicio||'',criadoEm:orig?(orig.criadoEm||0):novoTs()};
   if(orig&&orig.trocas) data.trocas=orig.trocas;
+  if(orig&&orig.email) data.email=orig.email;
   try{await salvarColab(data,st.editId);toast(st.editId?'Alterações salvas.':'Colaborador adicionado.');resetForm();$('iSug').hidden=true;renderLista();$('iNome').focus()}
   catch(e){toast('Não foi possível salvar. Verifique sua permissão de edição.')}
 });
@@ -1056,6 +1089,7 @@ function tags(al){return al.map(a=>`<span class="tag ${a.k}">${esc(a.t)}</span>`
 
 function viewIndividual(){
   const c=EF.find(x=>x.id===st.colab);
+  if(!c&&ROLE==='user') return `<h2>Meus dados</h2><p class="empty">Seu e-mail (${esc(emailsConta()[0]||'')}) não está vinculado a nenhum colaborador da escala. Peça à sua liderança para preencher o seu e-mail na aba Colaboradores.</p>`;
   if(!c) return `<h2>Visão individual</h2><p class="empty">Escolha um colaborador no filtro acima ou toque em “Ver” na lista.</p>`;
   const j=jornada(c);
   const saldo=LIMITE*60-j.total;
@@ -1066,6 +1100,7 @@ function viewIndividual(){
     :`<div class="wd off"><div class="dn">${DIAS_L[i]}</div><div class="hrs">Folga</div><div class="clk">${i===6?'fixa':'da semana'}</div></div>`).join('')}</div>
   <div class="sumline"><span>Total semanal <b>${dur(j.total)}</b></span></div>
   <div>${tags(j.alertas)||'<span class="tag ok">Dentro do limite</span>'}</div>
+  ${ROLE==='user'?'<p class="note">Para sugerir outro dia de folga, abra a aba Mensal e toque no dia desejado na sua linha. Acompanhe o pedido na aba Solicitações.</p>':''}
   <div style="margin-top:14px">${exportHTML()}</div>`;
 }
 function viewEquipe(){
@@ -1086,7 +1121,7 @@ const v=(c.folgaAuto||c.rodizio)?-1:c.folga;
   return `<option value="-1"${v===-1?' selected':''}>${c.rodizio&&!c.folgaAuto?'Rodízio (base '+DIAS[c.folga]+')':'Folga automática ('+DIAS[c.folga]+')'}</option>`+DIAS.slice(0,6).map((d,i)=>`<option value="${i}"${v===i?' selected':''}>Folga fixa: ${DIAS_L[i]}</option>`).join('');}
 function presRow(arr,s,extraCols){return DIAS.slice(0,6).map((d,i)=>{const p=arr.filter(c=>presente(c,i)).length;const opera=i<5||s.sab;const zero=arr.length&&opera&&p<Math.ceil(arr.length/2);return `<td class="c${zero?' zero':''}">${!opera&&p===0?'<span class="offt">fechado</span>':p}</td>`}).join('')}
 function viewGeral(){
-  const lista=st.setor?SETORES.filter(s=>s.id===st.setor):SETORES;
+  const lista=st.setor?setoresVis().filter(s=>s.id===st.setor):setoresVis();
   const topo=`<div class="bulk" role="group" aria-label="Sábado em massa"><span class="lbl">Sábado ${st.setor?'do setor filtrado':'em todos os setores'}</span>
   <button class="btn ghost small" data-sabtodos="1">Abrir sábado</button><button class="btn ghost small" data-sabtodos="0">Fechar sábado</button>
   <button class="btn ghost small" data-detalhe>${st.detalhe?'Ver resumo por setor':'Ver colaboradores'}</button></div>
@@ -1194,13 +1229,14 @@ st.busca='';
 function viewLista(){
   const q=norm(st.busca);
   const L=ordenar((st.setor?EF.filter(c=>c.setor===st.setor):EF).filter(c=>!q||norm(c.nome).includes(q)));
-  const optSet=c=>SETORES.map(x=>`<option value="${x.id}"${x.id===c.setor?' selected':''}>${esc(x.nome)}</option>`).join('');
+  const optSet=c=>setoresEdit().concat(SMAP[c.setor]&&!podeEditarSetor(c.setor)?[SMAP[c.setor]]:[]).map(x=>`<option value="${x.id}"${x.id===c.setor?' selected':''}>${esc(x.nome)}</option>`).join('');
   const rows=L.map(c=>{const j=jornada(c);const u=j.dias.find((x,i)=>i<5&&x.trab);const sb=j.dias[5];
     return `<tr>
     <td><input type="text" class="nomeSel" data-id="${c.id}" value="${esc(c.nome)}" maxlength="80" aria-label="Nome"></td>
     <td><select class="setSel" data-id="${c.id}" aria-label="Setor de ${esc(c.nome)}">${optSet(c)}</select></td>
     <td><select class="fgSel" data-id="${c.id}" aria-label="Folga de ${esc(c.nome)}">${fgOpts(c)}</select></td>
     <td><select class="compSel" data-id="${c.id}" aria-label="Jornada de ${esc(c.nome)}">${compOpts(modoDe(c),!podeSab(c))}</select></td>
+    <td><input type="email" class="emailSel" data-id="${c.id}" value="${esc(c.email||'')}" maxlength="120" placeholder="nome@clinicarejuvenesce.com.br" aria-label="E-mail de ${esc(c.nome)}"></td>
     <td><input type="time" class="iniSel" data-id="${c.id}" value="${c.inicio||params.inicio}" aria-label="Entrada de ${esc(c.nome)}"></td>
     <td><select class="tsSel" data-id="${c.id}" aria-label="Sábado de ${esc(c.nome)}">${tsOpts(c.trabSab||'auto')}</select></td>
     <td class="c"><b>${dur(j.total)}</b><div class="sm">${u?clock(u.ini)+' às '+clock(u.fim):''}${sb.trab?'<br>sáb '+clock(sb.ini)+' às '+clock(sb.fim):''}</div></td>
@@ -1209,7 +1245,7 @@ function viewLista(){
   return `<h2>Colaboradores</h2>
   <div class="bulk" role="search"><label class="lbl" for="lBusca" style="width:auto">Buscar</label><input type="search" id="lBusca" value="${esc(st.busca)}" placeholder="Nome do colaborador" style="flex:1 1 220px">
   <span class="tag">${L.length} de ${(st.setor?EF.filter(c=>c.setor===st.setor):EF).length}</span><button class="btn small" data-lnovo>Lançar novo</button></div>
-  ${L.length?`<div class="scroll"><table class="tlista"><thead><tr><th>Nome</th><th>Setor</th><th>Folga</th><th>Jornada</th><th>Entrada</th><th>Sábado</th><th class="c">Semana e horário</th><th>Alertas</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="empty">Nenhum colaborador encontrado.</p>'}
+  ${L.length?`<div class="scroll"><table class="tlista"><thead><tr><th>Nome</th><th>Setor</th><th>Folga</th><th>Jornada</th><th>E-mail</th><th>Entrada</th><th>Sábado</th><th class="c">Semana e horário</th><th>Alertas</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="empty">Nenhum colaborador encontrado.</p>'}
   <p class="note">As alterações feitas na tabela são salvas assim que você sai do campo ou troca a opção. Para mudar o nome, edite e saia do campo.</p>`;
 }
 $('painel').addEventListener('input',e=>{
@@ -1252,10 +1288,12 @@ function viewMensal(){
   const L=ordenar(st.setor?EF.filter(c=>c.setor===st.setor):EF);
   const {dias,cel}=montarMes(L);
   const head=`<tr><th class="stick">Colaborador</th>${dias.map(d=>`<th class="c md${d.dow>=5?' fds':''}${d.fer?' fer':''}"${d.fer?` title="${esc(d.fer)}"`:''}>${DIAS[d.dow]}<br>${d.dia}</th>`).join('')}</tr>`;
-  let body=''; let cur='';
+  let body=''; let cur=''; const PEND=pendMes();
   L.forEach(c=>{
     if(c.setor!==cur){cur=c.setor; body+=`<tr class="sec"><td class="stick">${esc(nomeSetor(c.setor))}</td><td colspan="${dias.length}"></td></tr>`}
-    body+=`<tr><td class="stick" title="${esc(c.nome)}">${esc(nomeCurto(c.nome))}</td>${dias.map(d=>{const x=cel(c,d);const clic=d.t>=VIG&&d.dow!==6;return `<td class="c md ${x.cls}${d.dow>=5&&!x.cls?' fds':''}"${clic?` data-c="${c.id}" data-t="${d.t}" title="${esc(c.nome)} · ${DIAS_L[d.dow]} ${d.dia}: toque para trocar a folga"`:''}>${x.txt}</td>`}).join('')}</tr>`;
+    body+=`<tr><td class="stick" title="${esc(c.nome)}">${esc(nomeCurto(c.nome))}</td>${dias.map(d=>{const x=cel(c,d);const clic=d.t>=VIG&&d.dow!==6;const meu=ROLE==='user'&&c.id===MEU_ID;const pd=PEND.has(norm(c.nome)+'|'+d.t);
+      const attr=!clic?'':meu?` data-r="${c.id}" data-t="${d.t}" title="${DIAS_L[d.dow]} ${d.dia}: toque para sugerir folga neste dia"`:podeEditarSetor(c.setor)?` data-c="${c.id}" data-t="${d.t}" title="${esc(c.nome)} · ${DIAS_L[d.dow]} ${d.dia}: toque para trocar a folga"`:'';
+      return `<td class="c md ${x.cls}${pd?' pend':''}${d.dow>=5&&!x.cls?' fds':''}"${attr}>${x.txt}</td>`}).join('')}</tr>`;
   });
   const fer=dias.filter(d=>d.fer&&d.t>=VIG).map(d=>`${d.dia} (${esc(d.fer)})`);
   return `<h2>Escala mensal · ${nomeMes()}</h2>
@@ -1263,7 +1301,7 @@ function viewMensal(){
   <label class="chk" style="margin:0"><input type="checkbox" id="mRod"${params.rodizio?' checked':''}> Rodízio semanal das folgas automáticas</label></div>
   ${exportHTML()}
   ${L.length?`<div class="scroll"><table class="mes"><thead>${head}</thead><tbody>${body}</tbody></table></div>`:'<p class="empty">Nenhum colaborador lançado.</p>'}
-  <p class="note">D = folga (descanso) · <b style="color:var(--bad)">F = feriado</b> (dia em vermelho) · sábado começa sempre às 08:00. Se o feriado cai no sábado, quem faz meio sábado não compensa as horas naquela semana. Toque em qualquer dia de um colaborador para trocar a folga daquela semana ou fixar a folga. Trocas manuais aparecem com contorno amarelo. Com o rodízio ligado, as folgas automáticas de cada equipe giram uma posição por semana: cada pessoa passa pelos dias de folga da equipe, e a cobertura diária continua a mesma. Folgas fixas e quem marcou "trabalha no sábado" não giram. ${fer.length?'Feriados no mês: '+fer.join(', ')+'. Feriados não são trabalhados.':''} Antes de 15/12/2026 a escala nova não vale.</p>`;
+  <p class="note">D = folga (descanso) · <b style="color:var(--bad)">F = feriado</b> (dia em vermelho) · sábado começa sempre às 08:00. Se o feriado cai no sábado, quem faz meio sábado não compensa as horas naquela semana. Toque em qualquer dia de um colaborador para trocar a folga daquela semana ou fixar a folga. Trocas manuais aparecem com contorno amarelo; dias com sugestão de folga aguardando aprovação aparecem hachurados em azul. Com o rodízio ligado, as folgas automáticas de cada equipe giram uma posição por semana: cada pessoa passa pelos dias de folga da equipe, e a cobertura diária continua a mesma. Folgas fixas e quem marcou "trabalha no sábado" não giram. ${fer.length?'Feriados no mês: '+fer.join(', ')+'. Feriados não são trabalhados.':''} Antes de 15/12/2026 a escala nova não vale.</p>`;
 }
 function textoMes(lista){
   const L=ordenar(lista); const {dias,cel}=montarMes(L); const val=dias.filter(d=>d.t>=VIG);
@@ -1346,7 +1384,7 @@ $('painel').addEventListener('click',async e=>{
     return;}
   const tb=e.target.closest('button[data-sabtodos]');
   if(tb){const val=tb.dataset.sabtodos==='1';
-    const alvo=(st.setor?SETORES.filter(x=>x.id===st.setor):SETORES).filter(x=>x.sab!==val);
+    const alvo=(st.setor?setoresVis().filter(x=>x.id===st.setor):setoresVis()).filter(x=>x.sab!==val);
     if(!alvo.length){toast(`O sábado já está ${val?'aberto':'fechado'} em todos.`);return}
     if(!confirm(`${val?'Abrir':'Fechar'} o sábado em ${alvo.length} ${alvo.length===1?'setor':'setores'}? As folgas automáticas serão recalculadas.`)) return;
     tb.disabled=true; let k=0;
@@ -1453,21 +1491,311 @@ $('painel').addEventListener('click',e=>{
   if(x.dataset.exp==='xlsx') baixarXlsx(L); else abrirTexto(L);
 });
 function render(){
-  EF=resolver(colabs);
+  EF=resolver(colabs).filter(c=>podeVerSetor(c.setor));
+  aplicarPerfilUI();
   document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===st.view)));
   $('fSetor').value=st.setor;
-  const pool=ordenar(st.setor?colabs.filter(c=>c.setor===st.setor):colabs);
-  if(st.colab && !colabs.some(c=>c.id===st.colab)) st.colab='';
+  const visC=colabs.filter(c=>podeVerSetor(c.setor));
+  const pool=ordenar(st.setor?visC.filter(c=>c.setor===st.setor):visC);
+  if(st.colab && !visC.some(c=>c.id===st.colab)) st.colab='';
+  if(ROLE==='user') st.colab=MEU_ID||'';
   $('fColab').innerHTML=`<option value="">Colaborador</option>`+pool.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');
   $('fColab').value=st.colab;
-  if(st.view==='individual' && !st.colab && pool[0]) st.colab=pool[0].id, $('fColab').value=st.colab;
-  document.querySelector('main .grid').classList.toggle('wide',RO||st.view==='mensal'||st.view==='lista'||st.view==='hist');
+  if(st.view==='individual' && !st.colab && pool[0] && ROLE!=='user') st.colab=pool[0].id, $('fColab').value=st.colab;
+  document.querySelector('main .grid').classList.toggle('wide',RO||ROLE==='user'||(ROLE==='lider'&&!LIDER_SET.size)||['mensal','lista','hist','solic','perfis'].includes(st.view));
   renderCards(); renderLista(); renderSetores(); syncForm();
   const legend=`<p class="note">Folga automática: distribui as folgas da equipe de forma equilibrada, com no mínimo 50% presente em cada dia de operação; no empate, escolhe o dia com menos folgas na clínica toda. Jornada de ${params.semanal||LIMITE}h: quem folga no sábado divide as horas de segunda a sexta; quem trabalha no sábado escolhe Integral (horas iguais nos 5 dias, sábado incluído) ou Meio sábado com compensação (sábado com ${params.sabado}h e a outra metade compensada nos 4 dias úteis). Jornada de 40h: 8h em todos os dias trabalhados, sem compensação. Barras: <span class="tag ok">até 8h</span><span class="tag">acima de 8h</span><span class="tag">sábado</span> em escala até 10h. Dias acima de 8h usam a compensação da CCT SINDEESS 2026/2027 (cláusula 8.1, limite de 10h por dia), vigente até 31/03/2027.</p>`;
-  $('painel').innerHTML=st.view==='hist'?viewHist():st.view==='lista'?viewLista():st.view==='setores'?viewSetores():st.view==='mensal'?viewMensal():(st.view==='individual'?viewIndividual():st.view==='equipe'?viewEquipe():viewGeral())+legend;
+  $('painel').innerHTML=st.view==='perfis'?viewPerfis():st.view==='solic'?viewSolic():st.view==='hist'?viewHist():st.view==='lista'?viewLista():st.view==='setores'?viewSetores():st.view==='mensal'?viewMensal():(st.view==='individual'?viewIndividual():st.view==='equipe'?viewEquipe():viewGeral())+legend;
   aplicarRO();
 }
 
+
+// ---------- perfis de acesso ----------
+// Administrador: vê, edita e exclui tudo em todos os setores.
+// Liderança: vê e edita apenas os setores indicados no perfil; aprova as sugestões de folga desses setores.
+// Usuário (qualquer outro e-mail): vê os próprios dados e a escala mensal da equipe; só pode sugerir folga.
+// Atenção: estas regras controlam o painel. Quem tem edição na planilha pelo SharePoint consegue alterá-la direto no Excel.
+const normEmail=e=>String(e==null?'':e).trim().toLowerCase();
+const EMAIL_RE=/^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/;
+const ROTULO={admin:'Administrador',lider:'Liderança',user:'Usuário'};
+const VIEWS={admin:['geral','equipe','individual','lista','mensal','setores','hist','solic','perfis'],lider:['geral','equipe','individual','lista','mensal','solic'],user:['individual','mensal','solic']};
+function emailsConta(){const c=CONTA||{}, t=c.idTokenClaims||{};return [...new Set([c.username,t.preferred_username,t.email,t.upn].filter(Boolean).map(normEmail))]}
+const quemSou=()=>(CONTA&&(CONTA.name||CONTA.username))||'';
+function lerPerfis(pf){
+  const L=[], vistos=new Set();
+  (pf||[]).slice(1).forEach(r=>{const email=normEmail(r[0]); if(!email||vistos.has(email)) return;
+    const k=norm(r[1]); const perfil=k.startsWith('admin')?'admin':k.startsWith('lider')?'lider':null; if(!perfil) return;
+    vistos.add(email); L.push({email,perfil,setores:String(r[2]||'').split(/[;,]/).map(x=>x.trim()).filter(Boolean)})});
+  PERFIS_ABA=L.length>0;
+  PERFIS=L.length?L:PERFIS_PADRAO.map(x=>Object.assign({},x,{setores:x.setores.slice()}));
+}
+function acharMeu(em){
+  let me=colabs.find(c=>c.email&&em.includes(c.email));
+  if(me||!CONTA||!CONTA.name) return me||null;
+  const n=norm(CONTA.name); me=colabs.filter(c=>norm(c.nome)===n&&!c.email); if(me.length===1) return me[0];
+  const tk=x=>String(x).trim().split(/\s+/).map(norm), a=tk(CONTA.name);
+  if(a.length<2) return null;
+  const cand=colabs.filter(c=>{if(c.email) return false; const b=tk(c.nome);return b.length>1&&b[0]===a[0]&&b[b.length-1]===a[a.length-1]});
+  return cand.length===1?cand[0]:null;
+}
+function calcPerfil(){
+  const antes=ROLE;
+  if(!store||store.kind!=='graph'){ROLE='admin';PERFIL=null;MEU_ID=null;LIDER_SET=new Set();return}
+  const em=emailsConta();
+  PERFIL=(PERFIS||[]).find(p=>em.includes(p.email))||null;
+  ROLE=PERFIL?PERFIL.perfil:'user';
+  LIDER_SET=new Set(ROLE==='lider'?PERFIL.setores.map(n=>SETOR_IDX[norm(n)]).filter(id=>id&&SMAP[id]):[]);
+  const me=acharMeu(em); MEU_ID=me?me.id:null;
+  RO=!PODE_EDITAR_PLANILHA||ROLE==='user';
+  if(antes!==ROLE) st.view=ROLE==='user'?'mensal':'geral';
+  fillSetorSelects();
+}
+function podeVerSetor(sid){
+  if(ROLE==='admin') return true;
+  if(ROLE==='lider') return LIDER_SET.has(sid);
+  const me=MEU_ID&&colabs.find(c=>c.id===MEU_ID); return !!me&&me.setor===sid;
+}
+function podeEditarSetor(sid){return !RO&&(ROLE==='admin'||(ROLE==='lider'&&LIDER_SET.has(sid)))}
+const setoresVis=()=>SETORES.filter(s=>podeVerSetor(s.id));
+const setoresEdit=()=>ROLE==='admin'?SETORES:ROLE==='lider'?SETORES.filter(s=>LIDER_SET.has(s.id)):[];
+function aplicarPerfilUI(){
+  const gr=!!store&&store.kind==='graph';
+  const ok=VIEWS[ROLE].filter(v=>gr||(v!=='solic'&&v!=='perfis'));
+  if(!ok.includes(st.view)) st.view=ROLE==='user'?'mensal':'geral';
+  document.querySelectorAll('.seg button').forEach(b=>{b.hidden=!ok.includes(b.dataset.view)});
+  const n=gr?pendGerir().length:0;
+  document.querySelector('.seg button[data-view="solic"]').textContent='Solicitações'+(n?` (${n})`:'');
+  if(ROLE==='user'){const me=MEU_ID&&colabs.find(c=>c.id===MEU_ID); st.setor=me?me.setor:''}
+  $('fSetor').hidden=ROLE==='user'; $('fColab').hidden=ROLE==='user';
+  const esconde=ROLE==='admin'?'':'none';
+  ['boxImp','boxParams','rowSeed','bNovoSetor'].forEach(id=>{$(id).style.display=esconde});
+  const pi=$('perfilInfo');
+  if(gr&&CONTA&&PERFIS){pi.hidden=false; pi.innerHTML=`${esc(emailsConta()[0]||'')} · <span class="perfil-tag">${ROTULO[ROLE]}</span>${ROLE==='lider'?' · '+esc([...LIDER_SET].map(nomeSetor).join(', ')||'nenhum setor atribuído'):''}`}
+  else pi.hidden=true;
+}
+async function gGravarPerfis(L){
+  if(L.length>100) throw new Error('Limite de 100 perfis.');
+  if(await gVal('Perfis','A1:A1')===null) await g('POST',`${wbp()}/worksheets/add`,{name:'Perfis'});
+  const V=[['E-mail','Perfil','Setores (Liderança, separados por ;)']].concat(L.map(p=>[p.email,p.perfil==='admin'?'Administrador':'Liderança',p.perfil==='lider'?p.setores.join('; '):'']));
+  while(V.length<101) V.push(['','','']);
+  await g('PATCH',rng('Perfis','A1:C101'),{values:V});
+  PERFIS_ABA=true;
+  try{const it=await gItem(); ITEM.mod=it.mod; ITEM.quem=it.quem}catch(_){}
+}
+async function salvarPerfis(nova,log){
+  if(ROLE!=='admin'||RO){toast('Só administradores com edição na planilha alteram perfis.');render();return false}
+  if(!nova.some(p=>p.perfil==='admin')){toast('É preciso manter pelo menos um administrador.');render();return false}
+  try{await gGravarPerfis(nova); PERFIS=nova; calcPerfil(); registrar('Perfis de acesso',log); toast('Perfis salvos.'); render(); return true}
+  catch(e){toast('Não foi possível salvar os perfis. '+e.message); render(); return false}
+}
+const copiaPerfis=()=>(PERFIS||[]).map(p=>Object.assign({},p,{setores:p.setores.slice()}));
+st.pfNovo=[];
+function viewPerfis(){
+  if(ROLE!=='admin') return '<h2>Perfis de acesso</h2><p class="empty">Somente administradores.</p>';
+  const meus=emailsConta();
+  const chk=(sel,attr)=>`<div class="pchk">${SETORES.map(s=>`<label><input type="checkbox" ${attr} value="${esc(s.nome)}"${sel.some(n=>norm(n)===norm(s.nome))?' checked':''}>${esc(s.nome)}</label>`).join('')}</div>`;
+  const rows=(PERFIS||[]).map((p,i)=>{const orf=p.perfil==='lider'?p.setores.filter(n=>!SMAP[SETOR_IDX[norm(n)]]):[];
+    return `<tr><td><b>${esc(p.email)}</b>${meus.includes(p.email)?' <span class="tag ok">você</span>':''}</td>
+    <td><select class="pfSel" data-i="${i}" aria-label="Perfil de ${esc(p.email)}"><option value="admin"${p.perfil==='admin'?' selected':''}>Administrador</option><option value="lider"${p.perfil==='lider'?' selected':''}>Liderança</option></select></td>
+    <td>${p.perfil==='admin'?'<span class="sm">Todos os setores</span>':chk(p.setores,`class="pfSet" data-i="${i}"`)+(p.setores.length?'':'<span class="tag bad">Nenhum setor marcado: não vê nem edita nenhum setor</span>')+(orf.length?`<span class="tag warn">Setor não encontrado: ${esc(orf.join(', '))}</span>`:'')}</td>
+    <td><button class="btn ghost small" data-pdel="${i}" aria-label="Remover ${esc(p.email)}">Remover</button></td></tr>`}).join('');
+  return `<h2>Perfis de acesso</h2>
+  <p class="note" style="margin-top:0"><b>Administrador</b>: vê, edita e exclui tudo, em todos os setores, e cadastra perfis. <b>Liderança</b>: vê e edita só os setores marcados e aprova as sugestões de folga desses setores. <b>Usuário</b> (qualquer e-mail fora desta lista): vê os próprios dados e a escala mensal da equipe, sem editar; pode sugerir outro dia de folga, que só vale depois da aprovação da liderança. O usuário é reconhecido pelo e-mail preenchido na aba Colaboradores.</p>
+  ${PERFIS_ABA?'':'<p class="ro-aviso">A aba "Perfis" ainda não existe na planilha. Valem os perfis iniciais abaixo. A aba é criada na primeira alteração feita aqui.</p>'}
+  <div class="bulk" role="group" aria-label="Adicionar perfil"><span class="lbl">Adicionar e-mail</span>
+  <input type="email" id="pfEmail" maxlength="120" placeholder="nome@clinicarejuvenesce.com.br" aria-label="E-mail" style="flex:1 1 240px">
+  <select id="pfPerfil" aria-label="Perfil"><option value="lider"${st.pfPerfil!=='admin'?' selected':''}>Liderança</option><option value="admin"${st.pfPerfil==='admin'?' selected':''}>Administrador</option></select>
+  <button class="btn small" id="pfAdd">Adicionar</button>
+  ${st.pfPerfil==='admin'?'':`<div style="width:100%"><span class="lbl">Setores que lidera</span>${chk(st.pfNovo,'data-pnew')}</div>`}</div>
+  <div class="scroll"><table class="tperfis"><thead><tr><th>E-mail</th><th>Perfil</th><th>Setores</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="empty">Nenhum perfil.</td></tr>'}</tbody></table></div>
+  <p class="note">As permissões valem dentro deste painel. Quem tem permissão de edição na planilha pelo SharePoint consegue alterá-la direto no Excel, inclusive esta lista. Deixe edição na planilha só para administradores e lideranças.</p>`;
+}
+$('painel').addEventListener('change',async e=>{
+  const t=e.target;
+  if(t.id==='pfPerfil'){st.pfPerfil=t.value;render();return}
+  if(t.hasAttribute&&t.hasAttribute('data-pnew')){st.pfNovo=[...$('painel').querySelectorAll('[data-pnew]:checked')].map(x=>x.value);return}
+  if(t.classList.contains('pfSel')){
+    const i=Number(t.dataset.i), L=copiaPerfis(), p=L[i]; if(!p) return;
+    if(p.perfil==='admin'&&t.value!=='admin'&&emailsConta().includes(p.email)&&!confirm('Você vai deixar de ser administrador e perder acesso a esta tela. Continuar?')){render();return}
+    p.perfil=t.value==='admin'?'admin':'lider'; if(p.perfil==='admin') p.setores=[];
+    await salvarPerfis(L,`${p.email}: perfil ${ROTULO[p.perfil]}`); return}
+  if(t.classList.contains('pfSet')){
+    const i=Number(t.dataset.i), L=copiaPerfis(), p=L[i]; if(!p) return;
+    p.setores=[...$('painel').querySelectorAll(`.pfSet[data-i="${i}"]:checked`)].map(x=>x.value);
+    await salvarPerfis(L,`${p.email}: liderança de ${p.setores.join(', ')||'nenhum setor'}`); return}
+  if(t.classList.contains('emailSel')){
+    const raw=colabs.find(c=>c.id===t.dataset.id); if(!raw) return;
+    const v=normEmail(t.value); if(v===(raw.email||'')){t.value=v;return}
+    if(v&&!EMAIL_RE.test(v)){toast('E-mail inválido.');t.value=raw.email||'';return}
+    const dono=v&&colabs.find(c=>c.id!==raw.id&&c.email===v); if(dono){toast(`Esse e-mail já está em ${dono.nome}.`);t.value=raw.email||'';return}
+    const d=Object.assign({},raw); delete d.id; if(v) d.email=v; else delete d.email;
+    try{await salvarColab(d,raw.id);toast('E-mail atualizado.')}catch(err){toast('Não foi possível salvar.');render()}
+  }
+});
+$('painel').addEventListener('click',async e=>{
+  if(e.target.closest('#pfAdd')){
+    const email=normEmail($('pfEmail').value), perfil=$('pfPerfil').value==='admin'?'admin':'lider';
+    if(!EMAIL_RE.test(email)){toast('Informe um e-mail válido.');$('pfEmail').focus();return}
+    if((PERFIS||[]).some(p=>p.email===email)){toast('Esse e-mail já tem perfil. Altere na tabela.');return}
+    const setores=perfil==='lider'?st.pfNovo.slice():[];
+    if(perfil==='lider'&&!setores.length&&!confirm('Nenhum setor marcado. Essa liderança não verá nenhum setor até você marcar. Adicionar assim mesmo?')) return;
+    const L=copiaPerfis(); L.push({email,perfil,setores});
+    if(await salvarPerfis(L,`${email} adicionado como ${ROTULO[perfil]}${setores.length?' de '+setores.join(', '):''}`)) st.pfNovo=[];
+    return}
+  const del=e.target.closest('button[data-pdel]');
+  if(del){const i=Number(del.dataset.pdel), L=copiaPerfis(), p=L[i]; if(!p) return;
+    if(!confirm(`Remover o perfil de ${p.email}? A pessoa passa a ter perfil Usuário.`)) return;
+    if(emailsConta().includes(p.email)&&!confirm('Este é o seu e-mail. Você vai perder o acesso de administrador. Continuar?')) return;
+    L.splice(i,1); await salvarPerfis(L,`${p.email} removido (${ROTULO[p.perfil]})`);}
+});
+
+// ---------- solicitações de folga ----------
+let ITEM_SOL=null;
+const SOL_ABA='Solicitacoes', SOL_ST={pendente:'Pendente',aprovada:'Aprovada',recusada:'Recusada',cancelada:'Cancelada'}, SOL_D=['seg','ter','qua','qui','sex','sab'];
+async function solWb(){
+  if(!CFG.solicitacoes) return wbp();
+  if(!ITEM_SOL){const it=await g('GET','/shares/'+shareId(CFG.solicitacoes)+'/driveItem?$select=id,parentReference'); ITEM_SOL={driveId:it.parentReference.driveId,id:it.id}}
+  return `/drives/${ITEM_SOL.driveId}/items/${ITEM_SOL.id}/workbook`;
+}
+async function solRng(a){return `${await solWb()}/worksheets('${SOL_ABA}')/range(address='${a}')`}
+async function solVal(){try{return (await g('GET',(await solRng('A1:N1000'))+'?$select=values')).values}catch(e){if(e.status===404) return null; throw e}}
+async function solPatch(a,values){await g('PATCH',await solRng(a),{values})}
+async function solTocou(){if(!CFG.solicitacoes){try{const it=await gItem(); ITEM.mod=it.mod; ITEM.quem=it.quem}catch(_){}}}
+async function carregarSol(){
+  if(!store||store.kind!=='graph'||!ITEM){SOL=SOL||[];return}
+  try{
+    const v=await solVal();
+    SOL=(v||[]).slice(1).map((r,i)=>{const id=String(r[0]||'').trim(); if(!id) return null;
+      const t=gData(r[6]);
+      return {row:i+2,id,ts:Number(id.replace(/^s/,'').split('-')[0])||0,solicitante:normEmail(r[2]),colab:String(r[3]||''),setor:String(r[4]||''),
+        tipo:norm(r[5]).startsWith('folgafixa')?'fixa':'semana',w:isNaN(t)?NaN:Math.round((t-REF0)/(7*864e5)),dia:SOL_D.indexOf(norm(r[7])),atual:SOL_D.indexOf(norm(r[8])),
+        obs:String(r[9]||''),status:norm(r[10])||'pendente',decPor:String(r[11]||''),decEm:String(r[12]||''),motivo:String(r[13]||'')};
+    }).filter(s=>s&&s.dia>=0&&(s.tipo==='fixa'||!isNaN(s.w)));
+  }catch(e){SOL=SOL||[]}
+}
+async function solProxLinha(){
+  const v=await solVal();
+  if(v===null){
+    await g('POST',`${await solWb()}/worksheets/add`,{name:SOL_ABA});
+    await solPatch('A1:N1',[['ID','Criada em','Solicitante','Colaborador','Setor','Tipo','Semana (segunda)','Dia pedido','Folga atual','Observação','Status','Decidido por','Decidido em','Motivo']]);
+    return 2;
+  }
+  let n=v.length; while(n>1&&!String(v[n-1][0]||'').trim()) n--;
+  if(n>=1000) throw new Error('A aba Solicitacoes chegou ao limite de 999 pedidos. Arquive os antigos.');
+  return n+1;
+}
+async function novaSol(s){
+  const linha=()=>[s.id,fmtData(s.ts),s.solicitante,s.colab,s.setor,s.tipo==='fixa'?'Folga fixa':'Só na semana',gSerial(REF0+s.w*7*864e5),DIAS[s.dia],DIAS[s.atual]||'',s.obs,'Pendente','','',''];
+  for(let k=0;k<3;k++){
+    const n=await solProxLinha(); await solPatch(`A${n}:N${n}`,[linha()]);
+    const ck=await g('GET',(await solRng(`A${n}:A${n}`))+'?$select=values');
+    if(String(ck.values[0][0])===s.id){s.row=n; (SOL=SOL||[]).push(s); await solTocou(); return}
+  }
+  throw new Error('Outra pessoa enviou um pedido ao mesmo tempo. Tente de novo.');
+}
+async function atualizarSol(s,status,motivo){
+  await carregarSol(); const cur=(SOL||[]).find(x=>x.id===s.id);
+  if(!cur) throw new Error('Solicitação não encontrada.');
+  if(cur.status!=='pendente') throw new Error('Esta solicitação já está '+(SOL_ST[cur.status]||cur.status).toLowerCase()+'.');
+  const quando=fmtData(Date.now());
+  await solPatch(`K${cur.row}:N${cur.row}`,[[SOL_ST[status],quemSou(),quando,motivo||'']]);
+  Object.assign(cur,{status,decPor:quemSou(),decEm:quando,motivo:motivo||''}); await solTocou(); return cur;
+}
+const f2d=t=>{const x=new Date(t);return String(x.getUTCDate()).padStart(2,'0')+'/'+String(x.getUTCMonth()+1).padStart(2,'0')};
+const diaSol=s=>REF0+(s.w*7+s.dia)*864e5;
+function descSol(s){return s.tipo==='fixa'?`Folga fixa: ${DIAS_L[s.atual]||'?'} → ${DIAS_L[s.dia]}`:`Só na semana de ${f2d(REF0+s.w*7*864e5)}: folga ${DIAS_L[s.atual]||'?'} → ${DIAS_L[s.dia]} ${f2d(diaSol(s))}`}
+const colabDeSol=s=>colabs.find(c=>norm(c.nome)===norm(s.colab))||null;
+const setorDeSol=s=>{const c=colabDeSol(s);return c?c.setor:SETOR_IDX[norm(s.setor)]||''};
+const minhaSol=s=>emailsConta().includes(s.solicitante);
+function pendGerir(){return ROLE==='user'||!SOL?[]:SOL.filter(s=>s.status==='pendente'&&podeVerSetor(setorDeSol(s)))}
+function pendMes(){
+  const m=new Set(); if(!SOL) return m;
+  SOL.forEach(s=>{if(s.status!=='pendente'||s.tipo!=='semana') return; if(ROLE==='user'?!minhaSol(s):!podeVerSetor(setorDeSol(s))) return; m.add(norm(s.colab)+'|'+diaSol(s))});
+  return m;
+}
+function impactoSol(s){
+  const c=EF.find(x=>norm(x.nome)===norm(s.colab)); if(!c) return '<span class="tag bad">Colaborador não está na escala</span>';
+  const team=EF.filter(x=>x.setor===c.setor), n=team.length, min=Math.ceil(n/2);
+  let p;
+  if(s.tipo==='semana'){const fs=folgasSemana(s.w); if(fs.get(c.id)===s.dia) return '<span class="tag">Já é a folga desta semana</span>'; p=team.filter(x=>x.id!==c.id&&fs.get(x.id)!==s.dia).length}
+  else p=team.filter(x=>x.id!==c.id&&x.folga!==s.dia).length;
+  return `<span class="tag ${p<min?'bad':'ok'}">${DIAS_L[s.dia]}: ficam ${p} de ${n} (mínimo ${min})</span>`;
+}
+const stTag=s=>`<span class="tag ${s.status==='aprovada'?'ok':s.status==='recusada'?'bad':s.status==='pendente'?'warn':''}">${SOL_ST[s.status]||esc(s.status)}</span>`;
+function viewSolic(){
+  if(!store||store.kind!=='graph') return '<h2>Solicitações de folga</h2><p class="empty">Disponível somente com a planilha conectada.</p>';
+  if(SOL===null){carregarSol().then(()=>{if(st.view==='solic')render()}); return '<h2>Solicitações de folga</h2><p class="empty">Carregando…</p>'}
+  const ord=a=>a.slice().sort((x,y)=>y.ts-x.ts);
+  const dec=s=>s.decPor?`<br><span class="sm">${esc(s.decPor)} · ${esc(s.decEm)}</span>`:'';
+  const mot=s=>s.motivo?`<br><span class="sm">Motivo: ${esc(s.motivo)}</span>`:'';
+  const obs=s=>s.obs?`<br><span class="sm">“${esc(s.obs)}”</span>`:'';
+  let h=`<h2>Solicitações de folga</h2><div class="bulk"><span class="lbl" style="width:auto">${ROLE==='user'?'Para pedir outro dia de folga, toque no dia na sua linha da aba Mensal.':'Aprovar aplica a troca na escala na hora. Recusar mantém a escala como está.'}</span><button class="btn ghost small" data-sreload>Atualizar</button></div>`;
+  if(ROLE!=='user'){
+    const P=ord(pendGerir()).reverse();
+    h+=`<h3>Aguardando aprovação (${P.length})</h3>`+(P.length?`<div class="scroll"><table class="tsol"><thead><tr><th>Pedido em</th><th>Colaborador</th><th>Pedido</th><th>Cobertura com a troca</th><th>Pedido por</th><th></th></tr></thead><tbody>${P.map(s=>`<tr><td style="white-space:nowrap">${esc(s.ts?fmtData(s.ts):'')}</td><td><b>${esc(s.colab)}</b><br><span class="sm">${esc(nomeSetor(setorDeSol(s))||s.setor)}</span></td><td>${esc(descSol(s))}${obs(s)}</td><td>${impactoSol(s)}</td><td class="sm">${esc(s.solicitante)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn small" data-sdec="ap" data-sid="${esc(s.id)}">Aprovar</button><button class="btn ghost small" data-sdec="re" data-sid="${esc(s.id)}">Recusar</button></div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Nenhuma sugestão pendente nos seus setores.</p>');
+  }
+  const M=ord(SOL.filter(minhaSol));
+  if(ROLE==='user'||M.length) h+=`<h3>Minhas solicitações</h3>`+(M.length?`<div class="scroll"><table class="tsol"><thead><tr><th>Pedido em</th><th>Pedido</th><th>Situação</th><th></th></tr></thead><tbody>${M.map(s=>`<tr><td style="white-space:nowrap">${esc(s.ts?fmtData(s.ts):'')}</td><td>${esc(descSol(s))}${obs(s)}</td><td>${stTag(s)}${dec(s)}${mot(s)}</td><td>${s.status==='pendente'?`<button class="btn ghost small" data-scan="${esc(s.id)}">Cancelar</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Você ainda não enviou sugestões.</p>');
+  if(ROLE!=='user'){
+    const H=ord(SOL.filter(s=>s.status!=='pendente'&&podeVerSetor(setorDeSol(s)))).slice(0,200);
+    h+=`<h3>Decididas</h3>`+(H.length?`<div class="scroll"><table class="tsol"><thead><tr><th>Pedido em</th><th>Colaborador</th><th>Pedido</th><th>Situação</th></tr></thead><tbody>${H.map(s=>`<tr><td style="white-space:nowrap">${esc(s.ts?fmtData(s.ts):'')}</td><td>${esc(s.colab)}</td><td>${esc(descSol(s))}${obs(s)}</td><td>${stTag(s)}${dec(s)}${mot(s)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Nenhuma decisão registrada.</p>');
+  }
+  return h;
+}
+async function aprovarSol(s){
+  const c=colabDeSol(s); if(!c) throw new Error(`${s.colab} não está mais na escala.`);
+  if(!podeEditarSetor(c.setor)) throw new Error('Você não pode editar o setor deste colaborador.');
+  await atualizarSol(s,'aprovada','');
+  const d=Object.assign({},c); delete d.id; const tr=Object.assign({},c.trocas||{});
+  if(s.tipo==='fixa'){d.folga=s.dia; d.rodizio=false; if(s.w>=0) delete tr[s.w]; if(s.dia===5&&d.trabSab==='sim') d.trabSab='auto'; if(s.dia<5&&d.trabSab==='nao') d.trabSab='auto'}
+  else tr[s.w]=s.dia;
+  d.trocas=tr; await salvarColab(d,c.id);
+  registrar('Folga aprovada',`${s.colab}: ${descSol(s)} (pedido de ${s.solicitante})`);
+}
+$('painel').addEventListener('click',async e=>{
+  if(e.target.closest('button[data-sreload]')){await carregarSol(); render(); return}
+  const b=e.target.closest('button[data-sdec]');
+  if(b){const s=(SOL||[]).find(x=>x.id===b.dataset.sid); if(!s) return;
+    if(b.dataset.sdec==='ap'){ if(!confirm(`Aprovar para ${s.colab}: ${descSol(s)}?`)) return;
+      b.disabled=true; try{await aprovarSol(s); toast('Aprovada. A escala foi atualizada.')}catch(err){toast(err.message)} render(); return }
+    const motivo=prompt(`Recusar o pedido de ${s.colab}. Motivo (aparece para o colaborador):`,''); if(motivo===null) return;
+    b.disabled=true; try{await atualizarSol(s,'recusada',motivo.trim().slice(0,300)); registrar('Folga recusada',`${s.colab}: ${descSol(s)}${motivo.trim()?' · motivo: '+motivo.trim():''}`); toast('Pedido recusado.')}catch(err){toast(err.message)} render(); return}
+  const cn=e.target.closest('button[data-scan]');
+  if(cn){const s=(SOL||[]).find(x=>x.id===cn.dataset.scan); if(!s||!minhaSol(s)) return; if(!confirm('Cancelar esta sugestão de folga?')) return;
+    cn.disabled=true; try{await atualizarSol(s,'cancelada',''); toast('Sugestão cancelada.')}catch(err){toast(err.message)} render(); return}
+  const cel=e.target.closest('td[data-r]'); if(cel) abrirPedido(cel.dataset.r,Number(cel.dataset.t));
+});
+let rqCtx=null;
+function abrirPedido(id,t){
+  const c=EF.find(x=>x.id===id); if(!c||id!==MEU_ID) return;
+  const dt=new Date(t), dow=(dt.getUTCDay()+6)%7, w=semanaIdx(t), fs=folgasSemana(w).get(id);
+  const fer=feriadosAno(dt.getUTCFullYear()).get(String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0'));
+  const pend=(SOL||[]).find(s=>s.status==='pendente'&&minhaSol(s)&&norm(s.colab)===norm(c.nome)&&(s.tipo==='fixa'||s.w===w));
+  rqCtx={id,dow,w,atual:fs};
+  $('fgT').textContent=`Sugerir folga · ${DIAS_L[dow]} ${f2d(t)}`;
+  let info=`Sua folga nesta semana: ${DIAS_L[fs]}. Folga padrão: ${DIAS_L[c.folga]}. A troca só vale depois que a liderança aprovar.`, b='';
+  if(fer) info=`${f2d(t)} é feriado (${fer}): não há expediente.`;
+  else if(fs===dow) info=`${DIAS_L[dow]} já é a sua folga nesta semana.`;
+  else if(pend) info=`Você já tem uma sugestão pendente (${descSol(pend)}). Cancele na aba Solicitações para pedir outra.`;
+  else {
+    b+=`<button class="btn small" data-rq="semana">Folgar ${DIAS_L[dow]} ${f2d(t)} no lugar de ${DIAS_L[fs]}, só nesta semana</button>`;
+    if(c.folga!==dow) b+=`<button class="btn ghost small" data-rq="fixa">Folga fixa toda ${DIAS_L[dow]}</button>`;
+  }
+  b+=`<button class="btn ghost small" data-rq="fechar">Fechar</button>`;
+  $('fgInfo').textContent=info; $('fgBtns').innerHTML=b;
+  const d=$('dlgFg'); if(d.showModal) d.showModal(); else d.setAttribute('open','');
+}
+$('fgBtns').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-rq]'); if(!b||!rqCtx) return; const dlg=$('dlgFg');
+  if(b.dataset.rq==='fechar'){dlg.close();return}
+  const c=EF.find(x=>x.id===rqCtx.id); if(!c){dlg.close();return}
+  const obs=prompt('Observação para a sua liderança (opcional):',''); if(obs===null) return;
+  const tipo=b.dataset.rq==='fixa'?'fixa':'semana';
+  const s={id:'s'+Date.now()+'-'+Math.random().toString(36).slice(2,6),ts:Date.now(),solicitante:emailsConta()[0]||'',colab:c.nome,setor:nomeSetor(c.setor),tipo,w:rqCtx.w,dia:rqCtx.dow,atual:tipo==='fixa'?c.folga:rqCtx.atual,obs:obs.trim().slice(0,300),status:'pendente'};
+  b.disabled=true;
+  try{await novaSol(s); dlg.close(); toast('Sugestão enviada para a sua liderança.'); render()}
+  catch(err){toast(err.status===403||err.status===401?'Sua conta não tem permissão para registrar pedidos na planilha. Fale com o administrador.':'Não foi possível enviar. '+err.message); b.disabled=false}
+});
 
 // ---------- importação ----------
 const MODELO_B64='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';
@@ -1485,7 +1813,7 @@ function lerPlanilha(wb){
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',raw:false,blankrows:false});
     for(let h=0;h<Math.min(rows.length,10);h++){
       const hs=rows[h].map(norm);
-      const col={nome:hs.indexOf('nome'),setor:hs.indexOf('setor'),folga:hs.findIndex(x=>x.startsWith('folga')),sabFmt:hs.findIndex(x=>x==='jornada'||x==='sabado'),ts:hs.findIndex(x=>x==='trabalhasabado'||x==='trabalhanosabado'),ini:hs.findIndex(x=>x==='entrada'||x==='horariodeentrada'),comp:hs.findIndex(x=>x.startsWith('compensa')),sabNovo:hs.findIndex(x=>x.includes('abresab')),horas:hs.findIndex(x=>x.includes('horas')&&!x.startsWith('compensa'))};
+      const col={email:hs.indexOf('email'),nome:hs.indexOf('nome'),setor:hs.indexOf('setor'),folga:hs.findIndex(x=>x.startsWith('folga')),sabFmt:hs.findIndex(x=>x==='jornada'||x==='sabado'),ts:hs.findIndex(x=>x==='trabalhasabado'||x==='trabalhanosabado'),ini:hs.findIndex(x=>x==='entrada'||x==='horariodeentrada'),comp:hs.findIndex(x=>x.startsWith('compensa')),sabNovo:hs.findIndex(x=>x.includes('abresab')),horas:hs.findIndex(x=>x.includes('horas')&&!x.startsWith('compensa'))};
       if(col.nome>=0&&col.setor>=0) return {rows:rows.slice(h+1),col,inicio:h+2};
     }
   }
@@ -1534,7 +1862,7 @@ function validar(found){
       else if(existentes.has(chave)){avisos.push('já lançado, será ignorado');ignorar=true}
       vistos.add(chave);
     }
-    const data={nome,setor,folga,sabado,trabSab:trabSab||'auto',inicio,criadoEm:9e15+i};
+    const data={nome,setor,folga,sabado,trabSab:trabSab||'auto',inicio,criadoEm:9e15+i}; const emI=normEmail(g('email')); if(emI){ if(EMAIL_RE.test(emI)) data.email=emI; else avisos.push(`e-mail "${emI}" inválido, ignorado`)}
     out.push({linha,nome,data,erros,avisos,ignorar,tid:'__imp'+i});
   });
   const novos=out.filter(r=>!r.erros.length&&!r.ignorar);
